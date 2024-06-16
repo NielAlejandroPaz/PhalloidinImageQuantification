@@ -10,10 +10,15 @@ CONFIG += c++17
 
 SOURCES += \
     main.cpp \
-    phalloidinimagequantification.cpp
+    phalloidinimagequantification.cpp \
+    thicknessanalysis.cpp \
+    waveanalysis.cpp
 
 HEADERS += \
-    phalloidinimagequantification.h
+    phalloidinimagequantification.h \
+    spline.h \
+    thicknessanalysis.h \
+    waveanalysis.h
 
 FORMS += \
     phalloidinimagequantification.ui

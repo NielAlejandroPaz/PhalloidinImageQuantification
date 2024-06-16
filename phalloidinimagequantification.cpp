@@ -1,13 +1,9 @@
 #include "phalloidinimagequantification.h"
 #include "ui_phalloidinimagequantification.h"
 
-#include <opencv2/imgcodecs/imgcodecs.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-
 #include <QFileDialog>
-#include <cmath>
 #include <filesystem>
+//#include <iostream>
 
 PhalloidinImageQuantification::PhalloidinImageQuantification(QWidget *parent)
     : QMainWindow(parent)
@@ -15,18 +11,26 @@ PhalloidinImageQuantification::PhalloidinImageQuantification(QWidget *parent)
 {
     ui->setupUi(this);
 
-    // class variables init
-    clickedPoints_.reserve(2);
-
     // Connect buttons
     connect(ui->BrowsePushButton, &QPushButton::clicked, this, &PhalloidinImageQuantification::BrowseButtonClicked);
     connect(ui->AnalyseThicknessPushButton, &QPushButton::clicked, this, &PhalloidinImageQuantification::AnalyseThicknessClicked);
     connect(ui->AnalyseWavesPushButton, &QPushButton::clicked, this, &PhalloidinImageQuantification::AnalyseWavinessClicked);
     connect(ui->ClearPushButton, &QPushButton::clicked, this, &PhalloidinImageQuantification::ClearButtonClicked);
+    connect(ui->WaveSaveImagePushButton, &QPushButton::clicked, this, &PhalloidinImageQuantification::SaveWaveAnalysisButtonClicked);
+    connect(ui->ThicknessSaveImagePushButton, &QPushButton::clicked, this, &PhalloidinImageQuantification::SaveThicknessAnalysisButtonClicked);
 
-    // Connect LineEdit
+    // Connect lineEdits
     connect(ui->BrowseLineEdit, &QLineEdit::returnPressed, this, &PhalloidinImageQuantification::BrowseLineEditChanged);
+    connect(ui->FilteringLineEdit, &QLineEdit::returnPressed, this, &PhalloidinImageQuantification::LineEditFilterValueChanged);
 
+    // Connect Slider
+    connect(ui->FilteringHorizontalSlider, &QSlider::valueChanged, this, &PhalloidinImageQuantification::SliderFilterValueChanged);
+
+    ui->FilteringLineEdit->setText(
+        QString::number(
+            ui->FilteringHorizontalSlider->value()
+            )
+        );
 }
 
 PhalloidinImageQuantification::~PhalloidinImageQuantification()
@@ -45,31 +49,25 @@ void PhalloidinImageQuantification::BrowseButtonClicked()
 
 void PhalloidinImageQuantification::AnalyseThicknessClicked()
 {
-    if(imageValid_)
+    if(imagePathValid_)
     {
-        // reset needed variables
-        clickedPointsCounter_ = 0;
-        pointDistance_ = 0;
         ui->DistanceLineEdit->clear();
-        // opencv implementation
-        cv::namedWindow("Output Window");
-        frame_ = cv::imread(currentImage_.toStdString());
-        cv::setMouseCallback("Output Window",&PhalloidinImageQuantification::OnMouseClickedOpenCV, this);
 
-        cv::putText(frame_, //target image
-                    "Use mouse to select points. Click <Space> to quit", //text
-                    cv::Point(10, 25), //top-left position
-                    cv::FONT_HERSHEY_DUPLEX,
-                    1.0,
-                    CV_RGB(255, 0, 0), //font color
-                    2);
+        // call analyse thickness
+        thicknessAnalysis_.StartAnalysis(currentImagePath_.toStdString());
+        double result = thicknessAnalysis_.GetDistance();
 
-        cv::imshow("Output Window", frame_);
-        cv::waitKey(); //blocking until window is closed
-
-        cv::destroyAllWindows();
-        QString distStr(std::to_string(pointDistance_).c_str());
+        // post last dist value to GUI
+        QString distStr(std::to_string(result).c_str());
         ui->DistanceLineEdit->setText(distStr);
+
+        // get image and display it in label
+        ui->ThicknessAnalysisResultLabel->setPixmap(
+            QPixmap::fromImage(
+                CvMat2QImage(
+                    thicknessAnalysis_.GetResultFrame())
+                )
+            );
     }
     else
     {
@@ -79,19 +77,133 @@ void PhalloidinImageQuantification::AnalyseThicknessClicked()
 
 void PhalloidinImageQuantification::AnalyseWavinessClicked()
 {
+    if(imagePathValid_)
+    {
+        // call analyse wave
+        waveAnalysis_.StartAnalysis(ui->FilteringLineEdit->text().toInt());
+        double result = waveAnalysis_.GetCoefficient();
 
+        // post last coefficient value to GUI
+        QString distStr(std::to_string(result).c_str());
+        ui->CoefficientLineEdit->setText(distStr);
+
+        // get image and display it in label
+        ui->WaveAnalysisResultLabel->setPixmap(
+            QPixmap::fromImage(
+                CvMat2QImage(
+                    waveAnalysis_.GetResultFrame())
+                )
+            );
+    }
+    else
+    {
+        ui->statusbar->showMessage("Cannot analyse. Image is not valid!", 5000);
+    }
 }
 
 void PhalloidinImageQuantification::ClearButtonClicked()
 {
     ui->BrowseLineEdit->clear();
-    imageValid_ = false;
+    imagePathValid_ = false;
 
-    // clear results
+    //clear images
+    ui->WaveAnalysisResultLabel->clear();
+    ui->WaveAnalysisResultLabel->setText("No Image Available");
 
-    //clear image
-    ui->ImageLabel->clear();
-    ui->ImageLabel->setText("No Image Selected");
+    ui->ThicknessAnalysisResultLabel->clear();
+    ui->ThicknessAnalysisResultLabel->setText("No Image Available");
+}
+
+void PhalloidinImageQuantification::SaveWaveAnalysisButtonClicked()
+{
+    if(waveAnalysis_.HasResult())
+    {
+        std::string savePath;
+        GetSaveImagePath(savePath);
+        if (!savePath.empty())
+        {
+            waveAnalysis_.SaveImage(savePath);
+        }
+    }
+    else
+    {
+        ui->statusbar->showMessage("Cannot save image. No result available!", 3000);
+    }
+}
+
+void PhalloidinImageQuantification::SaveThicknessAnalysisButtonClicked()
+{
+    if(thicknessAnalysis_.HasResult())
+    {
+        std::string savePath;
+        GetSaveImagePath(savePath);
+        if (!savePath.empty())
+        {
+            thicknessAnalysis_.SaveImage(savePath);
+        }
+    }
+    else
+    {
+        ui->statusbar->showMessage("Cannot save image. No result available!", 3000);
+    }
+}
+
+void PhalloidinImageQuantification::GetSaveImagePath(std::string& outPath)
+{
+    if(imagePathValid_)
+    {
+        //ask for path
+        QString savePath = QFileDialog::getSaveFileName(this, tr("Save Image"),
+                                                        "",
+                                                        tr("Images (*.png)"));
+        if (!savePath.isEmpty())
+        {
+            std::filesystem::path newPath(savePath.toStdString());
+            newPath.replace_extension(".png");
+            outPath = newPath.string();
+        }
+    }
+    else
+    {
+        ui->statusbar->showMessage("Cannot save image. Image is not valid!", 3000);
+    }
+}
+
+void PhalloidinImageQuantification::LineEditFilterValueChanged()
+{
+    bool isInt = false;
+    int value = ui->FilteringLineEdit->text().toInt(&isInt);
+    if(isInt)
+    {
+        SliderFilterValueChanged(value);
+    }
+    else
+    {
+         ui->statusbar->showMessage("Value must be integer", 3000);
+    }
+}
+
+void PhalloidinImageQuantification::SliderFilterValueChanged(int value)
+{
+    if(value < 0 || value > 255)
+    {
+        ui->statusbar->showMessage("Filtering values must be between 0 and 255", 3000);
+    }
+    else
+    {
+        if(imagePathValid_)
+        {
+            ui->FilteringLineEdit->setText(std::to_string(value).c_str());
+
+            // get thresholded image and display
+            ui->WaveAnalysisResultLabel->setPixmap(
+                QPixmap::fromImage(
+                    CvMat2QImage(
+                        waveAnalysis_.PreviewThreshold(value))
+                    )
+                );
+        }
+    }
 }
 
 void PhalloidinImageQuantification::BrowseLineEditChanged()
@@ -102,7 +214,7 @@ void PhalloidinImageQuantification::BrowseLineEditChanged()
 void PhalloidinImageQuantification::LoadImage(const QString& inputPath)
 {
     // Validate
-    imageValid_ = false;
+    imagePathValid_ = false;
     ::std::string inputString(inputPath.toStdString());
     if (std::filesystem::exists(inputString) && std::filesystem::is_regular_file(inputString))
     {
@@ -110,18 +222,40 @@ void PhalloidinImageQuantification::LoadImage(const QString& inputPath)
         auto extension = input.extension();
         if (extension == ".jpg" || extension == ".png" || extension == ".tiff" )
         {
-            imageValid_ = true;
+            imagePathValid_ = true;
         }
     }
 
-    if (imageValid_)
+    if (imagePathValid_)
     {
         // save path
-        currentImage_ = inputPath;
+        currentImagePath_ = inputPath;
 
         // Load it in image pixmap
-        QPixmap img(currentImage_);
-        ui->ImageLabel->setPixmap(img);
+        QPixmap img(currentImagePath_);
+        ui->ThicknessAnalysisResultLabel->setPixmap(img);
+
+        // load image as preview already
+        waveAnalysis_.SetImage(currentImagePath_.toStdString());
+        bool isInt = false;
+        int th = ui->FilteringLineEdit->text().toInt(&isInt);
+        if(isInt)
+        {
+
+            ui->WaveAnalysisResultLabel->setPixmap(
+                QPixmap::fromImage(
+                    CvMat2QImage(
+                        waveAnalysis_.PreviewThreshold(th)
+                        )
+                    )
+                );
+        }
+        else
+        {
+            ui->WaveAnalysisResultLabel->setPixmap(img);
+        }
+
+        ui->statusbar->showMessage("Image Loaded", 3000);
     }
     else
     {
@@ -130,59 +264,51 @@ void PhalloidinImageQuantification::LoadImage(const QString& inputPath)
 
 }
 
-
-void PhalloidinImageQuantification::OnMouseClickedOpenCV(int event, int x, int y, int, void* userdata)
+QImage PhalloidinImageQuantification::CvMat2QImage(const cv::Mat& mat)
 {
-    PhalloidinImageQuantification* settings = reinterpret_cast<PhalloidinImageQuantification*>(userdata);
-    settings->OnMouseClickedOpenCV(event, x, y);
-}
-
-
-void PhalloidinImageQuantification::OnMouseClickedOpenCV(int evt, int x, int y) {
-    if(evt == cv::EVENT_LBUTTONDOWN && clickedPointsCounter_ < 2)
+    // 8-bits unsigned, NO. OF CHANNELS=1
+    switch(mat.type())
     {
-        clickedPoints_[clickedPointsCounter_] = std::make_pair(x, y);
-        if(clickedPointsCounter_ == 1)
+        case CV_8UC3:
         {
-            // we have two points.
-            // draw circle
-            cv::circle(frame_,
-                       cv::Point(clickedPoints_[1].first,
-                                 clickedPoints_[1].second),
-                       4, CV_RGB(255,0,0), -1);
-            // draw line from this to the previous point
-            cv::line(frame_,
-                     cv::Point(clickedPoints_[0].first,
-                               clickedPoints_[0].second),
-                     cv::Point(clickedPoints_[1].first,
-                               clickedPoints_[1].second),
-                     CV_RGB(255,0,0), 2);
-
-            // calculate distance
-            pointDistance_ = std::sqrt(
-                std::pow(clickedPoints_[0].first - clickedPoints_[1].first, 2)
-                +
-                std::pow(clickedPoints_[0].second - clickedPoints_[1].second, 2)
-                );
-
-            cv::putText(frame_, //target image
-                        "Dist: " + std::to_string(pointDistance_), //text
-                        cv::Point(10, frame_.rows / 2), //top-left position
-                        cv::FONT_HERSHEY_DUPLEX,
-                        1.0,
-                        CV_RGB(255, 0, 0), //font color
-                        2);
+            // Create QImage with same dimensions as input Mat
+            //std::cout << "CV_8UC3" << std::endl;
+            QImage image(mat.data,
+                       mat.cols,
+                       mat.rows,
+                       static_cast<int>(mat.step),
+                       QImage::Format_RGB888
+                       );
+            return image.rgbSwapped();
         }
-        else
+        case CV_8UC4:
         {
-            cv::circle(frame_,
-                       cv::Point(clickedPoints_[0].first,
-                                 clickedPoints_[0].second),
-                       4, CV_RGB(255,0,0), -1);
+            //std::cout << "CV_8UC4" << std::endl;
+            QImage image(mat.data,
+                         mat.cols,
+                         mat.rows,
+                         static_cast<int>(mat.step),
+                         QImage::Format_ARGB32
+                         );
+            return image;
         }
-
-        clickedPointsCounter_++;
-        cv::imshow("Output Window", frame_);
+        case CV_8UC1:
+        {
+            //std::cout << "CV_8UC1" << std::endl;
+            QImage image(mat.data,
+                         mat.cols,
+                         mat.rows,
+                         static_cast<int>(mat.step),
+                         QImage::Format_Grayscale8
+                         );
+            return image;
+        }
+        default:
+        {
+            //std::cout << "UNKNOWN" << std::endl;
+            return QImage();
+        }
     }
 }
+
 

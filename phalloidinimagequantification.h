@@ -1,11 +1,12 @@
 #ifndef PHALLOIDINIMAGEQUANTIFICATION_H
 #define PHALLOIDINIMAGEQUANTIFICATION_H
 
-#include <QMainWindow>
-#include <string>
-#include <vector>
-#include <utility>
+#include "waveanalysis.h"
+#include "thicknessanalysis.h"
 #include <opencv2/core/core.hpp>
+
+#include <QMainWindow>
+
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -21,28 +22,31 @@ public:
     PhalloidinImageQuantification(QWidget *parent = nullptr);
     ~PhalloidinImageQuantification();
 
-
 private:
-    Ui::PhalloidinImageQuantification *ui;
-    void AnalyseWaviness(const ::std::string& imgPath);
-    void OnMouseClickedOpenCV(int evt, int x, int y);
-    static void OnMouseClickedOpenCV(int evt, int x, int y, int flags, void* param);
+    void LoadImage(const QString& inputPath);
+    static QImage CvMat2QImage(const cv::Mat& mat);
+    void GetSaveImagePath(std::string& outPath);
 
 private Q_SLOTS:
     void BrowseButtonClicked();
     void AnalyseThicknessClicked();
     void AnalyseWavinessClicked();
     void ClearButtonClicked();
+    void SaveWaveAnalysisButtonClicked();
+    void SaveThicknessAnalysisButtonClicked();
+
+    void SliderFilterValueChanged(int value);
+    void LineEditFilterValueChanged();
 
     void BrowseLineEditChanged();
-    void LoadImage(const QString& inputPath);
 
 private:
-    QString currentImage_{};
-    bool imageValid_{false};
-    std::vector<std::pair<int, int>> clickedPoints_{};
-    std::uint8_t clickedPointsCounter_{0};
-    cv::Mat frame_{};
-    double pointDistance_{0};
+    Ui::PhalloidinImageQuantification *ui;
+    QString currentImagePath_{};
+    bool imagePathValid_{false};
+
+    WaveAnalysis waveAnalysis_{};
+    ThicknessAnalysis thicknessAnalysis_{};
+
 };
 #endif // PHALLOIDINIMAGEQUANTIFICATION_H
