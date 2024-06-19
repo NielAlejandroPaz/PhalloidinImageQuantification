@@ -62,10 +62,12 @@ void PhalloidinImageQuantification::AnalyseThicknessClicked()
         ui->DistanceLineEdit->setText(distStr);
 
         // get image and display it in label
+        int w = ui->ThicknessAnalysisResultLabel->width();
+        int h = ui->ThicknessAnalysisResultLabel->height();
         ui->ThicknessAnalysisResultLabel->setPixmap(
             QPixmap::fromImage(
                 CvMat2QImage(
-                    thicknessAnalysis_.GetResultFrame())
+                    thicknessAnalysis_.GetResultFrame()).scaled(w,h,Qt::KeepAspectRatio)
                 )
             );
     }
@@ -88,10 +90,12 @@ void PhalloidinImageQuantification::AnalyseWavinessClicked()
         ui->CoefficientLineEdit->setText(distStr);
 
         // get image and display it in label
+        int w = ui->WaveAnalysisResultLabel->width();
+        int h = ui->WaveAnalysisResultLabel->height();
         ui->WaveAnalysisResultLabel->setPixmap(
             QPixmap::fromImage(
                 CvMat2QImage(
-                    waveAnalysis_.GetResultFrame())
+                    waveAnalysis_.GetResultFrame()).scaled(w,h,Qt::KeepAspectRatio)
                 )
             );
     }
@@ -196,10 +200,12 @@ void PhalloidinImageQuantification::SliderFilterValueChanged(int value)
             ui->FilteringLineEdit->setText(std::to_string(value).c_str());
 
             // get thresholded image and display
+            int w = ui->WaveAnalysisResultLabel->width();
+            int h = ui->WaveAnalysisResultLabel->height();
             ui->WaveAnalysisResultLabel->setPixmap(
                 QPixmap::fromImage(
                     CvMat2QImage(
-                        waveAnalysis_.PreviewThreshold(value))
+                        waveAnalysis_.PreviewThreshold(value)).scaled(w,h,Qt::KeepAspectRatio)
                     )
                 );
         }
@@ -233,26 +239,29 @@ void PhalloidinImageQuantification::LoadImage(const QString& inputPath)
 
         // Load it in image pixmap
         QPixmap img(currentImagePath_);
-        ui->ThicknessAnalysisResultLabel->setPixmap(img);
+        int w = ui->ThicknessAnalysisResultLabel->width();
+        int h = ui->ThicknessAnalysisResultLabel->height();
+        ui->ThicknessAnalysisResultLabel->setPixmap(img.scaled(w,h,Qt::KeepAspectRatio));
 
         // load image as preview already
         waveAnalysis_.SetImage(currentImagePath_.toStdString());
         bool isInt = false;
         int th = ui->FilteringLineEdit->text().toInt(&isInt);
+        w = ui->WaveAnalysisResultLabel->width();
+        h = ui->WaveAnalysisResultLabel->height();
         if(isInt)
         {
 
             ui->WaveAnalysisResultLabel->setPixmap(
                 QPixmap::fromImage(
                     CvMat2QImage(
-                        waveAnalysis_.PreviewThreshold(th)
-                        )
+                        waveAnalysis_.PreviewThreshold(th)).scaled(w,h,Qt::KeepAspectRatio)
                     )
                 );
         }
         else
         {
-            ui->WaveAnalysisResultLabel->setPixmap(img);
+            ui->WaveAnalysisResultLabel->setPixmap(img.scaled(w,h,Qt::KeepAspectRatio));
         }
 
         ui->statusbar->showMessage("Image Loaded", 3000);
