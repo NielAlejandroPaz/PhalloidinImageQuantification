@@ -9,19 +9,19 @@ CONFIG += c++17
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    main.cpp \
-    phalloidinimagequantification.cpp \
-    thicknessanalysis.cpp \
-    waveanalysis.cpp
+    src/main.cpp \
+    src/phalloidinimagequantification.cpp \
+    src/thicknessanalysis.cpp \
+    src/waveanalysis.cpp
 
 HEADERS += \
-    phalloidinimagequantification.h \
-    spline.h \
-    thicknessanalysis.h \
-    waveanalysis.h
+    include/phalloidinimagequantification.h \
+    include/spline.h \
+    include/thicknessanalysis.h \
+    include/waveanalysis.h
 
 FORMS += \
-    phalloidinimagequantification.ui
+    ui/phalloidinimagequantification.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin
